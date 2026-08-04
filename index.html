@@ -121,14 +121,14 @@
         </header>
 
         <!-- Timer Display Area (The Hero Section) -->
-        <div id="activePhaseContainer" class="flex-shrink-0 flex flex-col items-center justify-center transition-focus duration-700 rounded-[2.5rem] py-6 mb-4 mt-2">
+        <div id="activePhaseContainer" class="flex-shrink-0 flex flex-col items-center justify-center transition-focus duration-700 rounded-[2.5rem] py-2 mb-2 mt-1">
             
-            <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors">READY</p>
+            <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden">READY</p>
             
             <!-- Big Interval Timer -->
-            <div id="intervalTimeDisplay" class="text-[120px] sm:text-[180px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[200px] flex items-center justify-center">0.0</div>
+            <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center hidden">0</div>
             
-            <div class="h-6 mb-6">
+            <div id="nextPhaseLabelWrapper" class="h-6 mb-6 hidden">
                 <p id="nextPhaseLabel" class="text-slate-400 text-xs tracking-wider uppercase bg-slate-800/60 px-4 py-1.5 rounded-full border border-slate-700/50 hidden">Up Next: --</p>
             </div>
 
@@ -387,6 +387,7 @@
                 phaseLabel: document.getElementById('currentPhaseLabel'),
                 nextLabel: document.getElementById('nextPhaseLabel'),
                 activeContainer: document.getElementById('activePhaseContainer'),
+                nextLabelWrapper: document.getElementById('nextPhaseLabelWrapper'),
                 settingsContainer: document.getElementById('settingsContainer'),
                 topNav: document.getElementById('topNav'),
                 menuList: document.getElementById('menuList'),
@@ -585,14 +586,14 @@
                             <button onclick="app.startTimer(${index})" class="text-slate-400 hover:text-emerald-400 p-2 rounded-full hover:bg-slate-800 transition transform active:scale-95" title="Play from here">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                             </button>
-                            <div class="flex flex-col cursor-pointer" onclick="app.openEditModal(${step.id})" title="Edit Step">
-                                <span class="text-sm font-medium ${isBreak ? 'text-amber-100/70' : 'text-slate-200'} group-hover:text-emerald-300 transition-colors">${step.name}</span>
-                                <span class="text-[10px] font-mono text-slate-500 tracking-widest uppercase mt-0.5">${mins}:${secs} &bull; ${isBreak ? 'Rest' : 'Active'}</span>
-                            </div>
+                            <span class="text-sm font-medium cursor-pointer ${isBreak ? 'text-amber-100/70' : 'text-slate-200'} group-hover:text-emerald-300 transition-colors" onclick="app.openEditModal(${step.id})" title="Edit Step">${step.name}</span>
                         </div>
-                        <button onclick="app.deleteRoutineStep(${step.id})" class="text-slate-600 hover:text-red-400 transition p-2 rounded-xl hover:bg-slate-800 opacity-0 group-hover:opacity-100">
-                            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
-                        </button>
+                        <div class="flex items-center space-x-3">
+                            <span class="text-xs font-mono ${isBreak ? 'text-amber-400/70' : 'text-emerald-400/70'}">${mins}:${secs}</span>
+                            <button onclick="app.deleteRoutineStep(${step.id})" class="text-slate-600 hover:text-red-400 transition p-2 rounded-xl hover:bg-slate-800 opacity-0 group-hover:opacity-100">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            </button>
+                        </div>
                     `;
                     list.appendChild(el);
                 });
@@ -791,6 +792,19 @@
                 this.ui.mainBtn.textContent = 'PAUSE';
                 this.ui.mainBtn.className = this.classes.btnPause;
                 
+                // Show timer elements
+                this.ui.phaseLabel.classList.remove('hidden');
+                this.ui.intervalTime.classList.remove('hidden');
+                this.ui.nextLabelWrapper.classList.remove('hidden');
+                
+                // Restore container padding for running state
+                this.ui.activeContainer.classList.remove('py-2', 'mb-2', 'mt-1');
+                this.ui.activeContainer.classList.add('py-6', 'mb-4', 'mt-2');
+                
+                // Enlarge timer display
+                this.ui.intervalTime.classList.remove('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
+                this.ui.intervalTime.classList.add('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
+                
                 // Trigger Focus Mode
                 this.ui.settingsContainer.classList.add('focus-hidden');
                 this.ui.topNav.classList.add('focus-hidden');
@@ -807,6 +821,19 @@
                 this.ui.mainBtn.textContent = 'START SESSION';
                 this.ui.mainBtn.className = this.classes.btnBegin;
                 
+                // Shrink timer display back to idle size
+                this.ui.intervalTime.classList.remove('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
+                this.ui.intervalTime.classList.add('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
+                
+                // Hide timer elements in idle state (only show session pill)
+                this.ui.phaseLabel.classList.add('hidden');
+                this.ui.intervalTime.classList.add('hidden');
+                this.ui.nextLabelWrapper.classList.add('hidden');
+                
+                // Reduce container padding for idle state
+                this.ui.activeContainer.classList.remove('py-6', 'mb-4', 'mt-2');
+                this.ui.activeContainer.classList.add('py-2', 'mb-2', 'mt-1');
+                
                 // Exit Focus Mode
                 this.ui.settingsContainer.classList.remove('focus-hidden');
                 this.ui.topNav.classList.remove('focus-hidden');
@@ -815,8 +842,8 @@
                 this.ui.appContainer.style.backgroundColor = '#0f172a'; // Reset to Slate
                 this.ui.activeContainer.classList.remove('pulse-ring');
                 this.ui.phaseLabel.textContent = "READY";
-                this.ui.phaseLabel.className = "text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors";
-                this.ui.intervalTime.textContent = "0.0";
+                this.ui.phaseLabel.className = "text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden";
+                this.ui.intervalTime.textContent = "0";
                 this.ui.nextLabel.classList.add('hidden');
                 
                 this.highlightRoutineStep(-1);
@@ -834,9 +861,15 @@
 
             endSession() {
                 this.resetTimer();
+                // Show phase label and timer for the completion message
+                this.ui.phaseLabel.classList.remove('hidden');
+                this.ui.intervalTime.classList.remove('hidden');
                 this.ui.phaseLabel.textContent = "COMPLETE";
                 this.ui.phaseLabel.className = "text-emerald-400 text-sm font-bold tracking-[0.2em] uppercase mb-2 h-6 flex items-center justify-center transition-colors";
                 this.ui.intervalTime.textContent = "DONE";
+                // Restore some padding for visibility
+                this.ui.activeContainer.classList.remove('py-2', 'mb-2', 'mt-1');
+                this.ui.activeContainer.classList.add('py-6', 'mb-4', 'mt-2');
                 this.audio.play('session_end'); 
             },
 
@@ -865,7 +898,7 @@
                 }
 
                 this.ui.totalTime.textContent = this.formatTime(this.expectedEndTime - now);
-                this.ui.intervalTime.textContent = Math.max(0, (this.nextPhaseTime - now) / 1000).toFixed(1);
+                this.ui.intervalTime.textContent = Math.max(0, Math.ceil((this.nextPhaseTime - now) / 1000));
             },
 
             transitionPhase(now) {
