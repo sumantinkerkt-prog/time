@@ -578,19 +578,19 @@
                     
                     const el = document.createElement('div');
                     // Improved card layout for steps
-                    el.className = `flex justify-between items-center p-4 rounded-2xl border transition-all duration-200 group ${isBreak ? 'bg-slate-900/40 border-slate-800/50' : 'bg-slate-800/40 border-slate-700/60'} hover:border-emerald-500/40`;
+                    el.className = `flex justify-between items-center py-2.5 px-4 rounded-2xl border transition-all duration-200 group ${isBreak ? 'bg-slate-900/40 border-slate-800/50' : 'bg-slate-800/40 border-slate-700/60'} hover:border-emerald-500/40`;
                     el.id = `routine-step-${index}`;
                     
                     el.innerHTML = `
                         <div class="flex items-center space-x-4">
-                            <button onclick="app.startTimer(${index})" class="text-slate-400 hover:text-emerald-400 p-2 rounded-full hover:bg-slate-800 transition transform active:scale-95" title="Play from here">
+                            <button onclick="app.startTimer(${index})" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-full hover:bg-slate-800 transition transform active:scale-95" title="Play from here">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                             </button>
                             <span class="text-sm font-medium cursor-pointer ${isBreak ? 'text-amber-100/70' : 'text-slate-200'} group-hover:text-emerald-300 transition-colors" onclick="app.openEditModal(${step.id})" title="Edit Step">${step.name}</span>
                         </div>
                         <div class="flex items-center space-x-3">
                             <span class="text-xs font-mono ${isBreak ? 'text-amber-400/70' : 'text-emerald-400/70'}">${mins}:${secs}</span>
-                            <button onclick="app.deleteRoutineStep(${step.id})" class="text-slate-600 hover:text-red-400 transition p-2 rounded-xl hover:bg-slate-800 opacity-0 group-hover:opacity-100">
+                            <button onclick="app.deleteRoutineStep(${step.id})" class="text-slate-600 hover:text-red-400 transition p-1.5 rounded-xl hover:bg-slate-800 opacity-0 group-hover:opacity-100">
                                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </button>
                         </div>
