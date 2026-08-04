@@ -79,6 +79,59 @@
         .transition-focus {
             transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* ---- Landscape (90deg) Timer Stage ---- */
+        #activePhaseContainer { position: relative; }
+
+        #timerStage {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            transform-origin: center center;
+            will-change: transform;
+        }
+
+        /* Detached from flow + centered, ready to spin */
+        #timerStage.stage-landscape {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(0deg);
+            transition: transform 0.8s cubic-bezier(0.65, 0, 0.35, 1);
+        }
+
+        /* The actual 90 degree turn */
+        #timerStage.stage-landscape.stage-spun {
+            transform: translate(-50%, -50%) rotate(90deg);
+        }
+
+        /* Sideways layout: keep the big digits dead-centre on screen by
+           balancing the space above/below them with 1fr grid tracks. */
+        #timerStage.stage-landscape {
+            display: grid;
+            grid-template-rows: 1fr auto 1fr;
+            justify-items: center;
+            align-items: center;
+        }
+        #timerStage.stage-landscape > #currentPhaseLabel {
+            grid-row: 1;
+            align-self: end;
+            margin-bottom: 0;
+        }
+        #timerStage.stage-landscape > #intervalTimeDisplay {
+            grid-row: 2;
+            margin-bottom: 0;
+        }
+        #timerStage.stage-landscape > #timerBottomGroup {
+            grid-row: 3;
+            align-self: start;
+            padding-top: 0.75rem;
+        }
+        #timerStage.stage-landscape #nextPhaseLabelWrapper {
+            margin-bottom: 0.75rem;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-0 sm:p-4 bg-slate-950">
@@ -122,20 +175,25 @@
 
         <!-- Timer Display Area (The Hero Section) -->
         <div id="activePhaseContainer" class="flex-shrink-0 flex flex-col items-center justify-center transition-focus duration-700 rounded-[2.5rem] py-2 mb-2 mt-1">
-            
-            <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden">READY</p>
-            
-            <!-- Big Interval Timer -->
-            <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center hidden">0</div>
-            
-            <div id="nextPhaseLabelWrapper" class="h-6 mb-6 hidden">
-                <p id="nextPhaseLabel" class="text-slate-400 text-xs tracking-wider uppercase bg-slate-800/60 px-4 py-1.5 rounded-full border border-slate-700/50 hidden">Up Next: --</p>
-            </div>
 
-            <!-- Total Remaining (Small Pill) -->
-            <div class="flex items-center space-x-3 text-slate-400 bg-slate-900/80 px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner">
-                <span class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Session</span>
-                <span id="totalTimeDisplay" class="text-sm font-mono-extrabold text-slate-200">00:00</span>
+            <!-- Rotatable stage: turns 90deg while a session is running -->
+            <div id="timerStage">
+                <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden">READY</p>
+
+                <!-- Big Interval Timer -->
+                <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center hidden">0</div>
+
+                <div id="timerBottomGroup" class="flex flex-col items-center">
+                    <div id="nextPhaseLabelWrapper" class="h-6 mb-6 hidden">
+                        <p id="nextPhaseLabel" class="text-slate-400 text-xs tracking-wider uppercase bg-slate-800/60 px-4 py-1.5 rounded-full border border-slate-700/50 hidden">Up Next: --</p>
+                    </div>
+
+                    <!-- Total Remaining (Small Pill) -->
+                    <div class="flex items-center space-x-3 text-slate-400 bg-slate-900/80 px-5 py-2.5 rounded-2xl border border-slate-800 shadow-inner">
+                        <span class="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Session</span>
+                        <span id="totalTimeDisplay" class="text-sm font-mono-extrabold text-slate-200">00:00</span>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -353,6 +411,11 @@
             isFirstIntervalActive: true,
             activeRunIndex: 0,
             lastTickSecond: -1,
+
+            // Landscape rotation tracking
+            isRotated: false,
+            unrotateTimeout: null,
+            stageObserver: null,
             
             // Flow Data Management 
             flows: [
@@ -387,6 +450,7 @@
                 phaseLabel: document.getElementById('currentPhaseLabel'),
                 nextLabel: document.getElementById('nextPhaseLabel'),
                 activeContainer: document.getElementById('activePhaseContainer'),
+                timerStage: document.getElementById('timerStage'),
                 nextLabelWrapper: document.getElementById('nextPhaseLabelWrapper'),
                 settingsContainer: document.getElementById('settingsContainer'),
                 topNav: document.getElementById('topNav'),
@@ -428,6 +492,14 @@
                     document.getElementById(id).addEventListener('input', () => {
                         if(this.state === 'idle') this.resetTimer();
                     });
+                });
+
+                // Fallback for browsers without ResizeObserver
+                window.addEventListener('resize', () => {
+                    if (this.isRotated) this.fitStage();
+                });
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => { if (this.isRotated) this.fitStage(); }, 250);
                 });
             },
 
@@ -811,6 +883,98 @@
                 
                 // Expand Timer vertically slightly
                 this.ui.activeContainer.classList.add('flex-1');
+
+                // Turn the whole timer block sideways (landscape reading)
+                this.rotateStage();
+            },
+
+            // --- Landscape Rotation ---
+            rotateStage() {
+                if (this.isRotated) return;
+                this.isRotated = true;
+
+                if (this.unrotateTimeout) {
+                    clearTimeout(this.unrotateTimeout);
+                    this.unrotateTimeout = null;
+                }
+
+                const stage = this.ui.timerStage;
+
+                // Detach from flow & center it, then spin on the next frame so it animates
+                stage.classList.add('stage-landscape');
+                this.fitStage();
+
+                requestAnimationFrame(() => {
+                    if (this.isRotated) stage.classList.add('stage-spun');
+                });
+
+                // Keep the sideways layout correct as focus-mode expands / on resize
+                if ('ResizeObserver' in window && !this.stageObserver) {
+                    this.stageObserver = new ResizeObserver(() => {
+                        if (this.isRotated) this.fitStage();
+                    });
+                }
+                if (this.stageObserver) this.stageObserver.observe(this.ui.activeContainer);
+            },
+
+            unrotateStage() {
+                const stage = this.ui.timerStage;
+
+                if (this.stageObserver) this.stageObserver.disconnect();
+
+                if (!this.isRotated) {
+                    stage.classList.remove('stage-landscape', 'stage-spun');
+                    this.clearStageSizing();
+                    return;
+                }
+                this.isRotated = false;
+
+                // Spin back, then re-attach to normal flow once the animation finishes
+                stage.classList.remove('stage-spun');
+                if (this.unrotateTimeout) clearTimeout(this.unrotateTimeout);
+                this.unrotateTimeout = setTimeout(() => {
+                    if (this.isRotated) return;
+                    stage.classList.remove('stage-landscape');
+                    this.clearStageSizing();
+                    this.unrotateTimeout = null;
+                }, 820);
+            },
+
+            // Swap width/height so the rotated block fills the available space,
+            // and scale the big digits to the space it actually has.
+            fitStage() {
+                const container = this.ui.activeContainer;
+                const stage = this.ui.timerStage;
+                const cs = getComputedStyle(container);
+                const rect = container.getBoundingClientRect();
+
+                const innerW = rect.width - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+                const innerH = rect.height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+                if (innerW <= 0 || innerH <= 0) return;
+
+                // Rotated 90deg: the stage's width runs down the screen, its height runs across
+                stage.style.width = Math.round(innerH) + 'px';
+                stage.style.height = Math.round(innerW) + 'px';
+
+                // Digit size is capped two ways:
+                //  - across the screen: phase label + next label + session pill eat ~160px
+                //  - down the screen: room for up to 4 monospace characters
+                const byThickness = (innerW - 160) / 1.25;
+                const byLength = innerH / 2.6;
+                const fontPx = Math.max(48, Math.min(200, Math.floor(Math.min(byThickness, byLength))));
+
+                this.ui.intervalTime.style.fontSize = fontPx + 'px';
+                this.ui.intervalTime.style.lineHeight = '1';
+                this.ui.intervalTime.style.height = Math.round(fontPx * 1.25) + 'px';
+            },
+
+            clearStageSizing() {
+                const stage = this.ui.timerStage;
+                stage.style.width = '';
+                stage.style.height = '';
+                this.ui.intervalTime.style.fontSize = '';
+                this.ui.intervalTime.style.lineHeight = '';
+                this.ui.intervalTime.style.height = '';
             },
 
             resetTimer() {
@@ -838,6 +1002,9 @@
                 this.ui.settingsContainer.classList.remove('focus-hidden');
                 this.ui.topNav.classList.remove('focus-hidden');
                 this.ui.activeContainer.classList.remove('flex-1');
+
+                // Spin the timer block back upright
+                this.unrotateStage();
                 
                 this.ui.appContainer.style.backgroundColor = '#0f172a'; // Reset to Slate
                 this.ui.activeContainer.classList.remove('pulse-ring');
