@@ -126,7 +126,7 @@
             <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors">READY</p>
             
             <!-- Big Interval Timer -->
-            <div id="intervalTimeDisplay" class="text-[120px] sm:text-[180px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[200px] flex items-center justify-center">0</div>
+            <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center">0</div>
             
             <div class="h-6 mb-6">
                 <p id="nextPhaseLabel" class="text-slate-400 text-xs tracking-wider uppercase bg-slate-800/60 px-4 py-1.5 rounded-full border border-slate-700/50 hidden">Up Next: --</p>
@@ -791,6 +791,10 @@
                 this.ui.mainBtn.textContent = 'PAUSE';
                 this.ui.mainBtn.className = this.classes.btnPause;
                 
+                // Enlarge timer display
+                this.ui.intervalTime.classList.remove('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
+                this.ui.intervalTime.classList.add('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
+                
                 // Trigger Focus Mode
                 this.ui.settingsContainer.classList.add('focus-hidden');
                 this.ui.topNav.classList.add('focus-hidden');
@@ -806,6 +810,10 @@
                 
                 this.ui.mainBtn.textContent = 'START SESSION';
                 this.ui.mainBtn.className = this.classes.btnBegin;
+                
+                // Shrink timer display back to idle size
+                this.ui.intervalTime.classList.remove('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
+                this.ui.intervalTime.classList.add('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
                 
                 // Exit Focus Mode
                 this.ui.settingsContainer.classList.remove('focus-hidden');
