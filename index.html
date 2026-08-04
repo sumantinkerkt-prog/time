@@ -121,14 +121,14 @@
         </header>
 
         <!-- Timer Display Area (The Hero Section) -->
-        <div id="activePhaseContainer" class="flex-shrink-0 flex flex-col items-center justify-center transition-focus duration-700 rounded-[2.5rem] py-6 mb-4 mt-2">
+        <div id="activePhaseContainer" class="flex-shrink-0 flex flex-col items-center justify-center transition-focus duration-700 rounded-[2.5rem] py-2 mb-2 mt-1">
             
-            <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors">READY</p>
+            <p id="currentPhaseLabel" class="text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden">READY</p>
             
             <!-- Big Interval Timer -->
-            <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center">0</div>
+            <div id="intervalTimeDisplay" class="text-[60px] sm:text-[80px] font-mono-extrabold text-white tracking-tighter mb-4 drop-shadow-2xl transition-all h-[120px] flex items-center justify-center hidden">0</div>
             
-            <div class="h-6 mb-6">
+            <div id="nextPhaseLabelWrapper" class="h-6 mb-6 hidden">
                 <p id="nextPhaseLabel" class="text-slate-400 text-xs tracking-wider uppercase bg-slate-800/60 px-4 py-1.5 rounded-full border border-slate-700/50 hidden">Up Next: --</p>
             </div>
 
@@ -387,6 +387,7 @@
                 phaseLabel: document.getElementById('currentPhaseLabel'),
                 nextLabel: document.getElementById('nextPhaseLabel'),
                 activeContainer: document.getElementById('activePhaseContainer'),
+                nextLabelWrapper: document.getElementById('nextPhaseLabelWrapper'),
                 settingsContainer: document.getElementById('settingsContainer'),
                 topNav: document.getElementById('topNav'),
                 menuList: document.getElementById('menuList'),
@@ -791,6 +792,15 @@
                 this.ui.mainBtn.textContent = 'PAUSE';
                 this.ui.mainBtn.className = this.classes.btnPause;
                 
+                // Show timer elements
+                this.ui.phaseLabel.classList.remove('hidden');
+                this.ui.intervalTime.classList.remove('hidden');
+                this.ui.nextLabelWrapper.classList.remove('hidden');
+                
+                // Restore container padding for running state
+                this.ui.activeContainer.classList.remove('py-2', 'mb-2', 'mt-1');
+                this.ui.activeContainer.classList.add('py-6', 'mb-4', 'mt-2');
+                
                 // Enlarge timer display
                 this.ui.intervalTime.classList.remove('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
                 this.ui.intervalTime.classList.add('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
@@ -815,6 +825,15 @@
                 this.ui.intervalTime.classList.remove('text-[120px]', 'sm:text-[180px]', 'h-[200px]');
                 this.ui.intervalTime.classList.add('text-[60px]', 'sm:text-[80px]', 'h-[120px]');
                 
+                // Hide timer elements in idle state (only show session pill)
+                this.ui.phaseLabel.classList.add('hidden');
+                this.ui.intervalTime.classList.add('hidden');
+                this.ui.nextLabelWrapper.classList.add('hidden');
+                
+                // Reduce container padding for idle state
+                this.ui.activeContainer.classList.remove('py-6', 'mb-4', 'mt-2');
+                this.ui.activeContainer.classList.add('py-2', 'mb-2', 'mt-1');
+                
                 // Exit Focus Mode
                 this.ui.settingsContainer.classList.remove('focus-hidden');
                 this.ui.topNav.classList.remove('focus-hidden');
@@ -823,7 +842,7 @@
                 this.ui.appContainer.style.backgroundColor = '#0f172a'; // Reset to Slate
                 this.ui.activeContainer.classList.remove('pulse-ring');
                 this.ui.phaseLabel.textContent = "READY";
-                this.ui.phaseLabel.className = "text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors";
+                this.ui.phaseLabel.className = "text-slate-400 text-sm font-medium tracking-[0.15em] uppercase mb-2 h-6 flex items-center justify-center transition-colors hidden";
                 this.ui.intervalTime.textContent = "0";
                 this.ui.nextLabel.classList.add('hidden');
                 
@@ -842,9 +861,15 @@
 
             endSession() {
                 this.resetTimer();
+                // Show phase label and timer for the completion message
+                this.ui.phaseLabel.classList.remove('hidden');
+                this.ui.intervalTime.classList.remove('hidden');
                 this.ui.phaseLabel.textContent = "COMPLETE";
                 this.ui.phaseLabel.className = "text-emerald-400 text-sm font-bold tracking-[0.2em] uppercase mb-2 h-6 flex items-center justify-center transition-colors";
                 this.ui.intervalTime.textContent = "DONE";
+                // Restore some padding for visibility
+                this.ui.activeContainer.classList.remove('py-2', 'mb-2', 'mt-1');
+                this.ui.activeContainer.classList.add('py-6', 'mb-4', 'mt-2');
                 this.audio.play('session_end'); 
             },
 
