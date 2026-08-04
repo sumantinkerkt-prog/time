@@ -124,13 +124,18 @@
             grid-row: 2;
             margin-bottom: 0;
         }
+        /* Sideways, stack the two pills along the (roomy) reading axis instead of
+           across the screen — that hands the digits back ~50px of height. */
         #timerStage.stage-landscape > #timerBottomGroup {
             grid-row: 3;
             align-self: start;
+            flex-direction: row;
+            align-items: center;
+            gap: 0.75rem;
             padding-top: 0.75rem;
         }
         #timerStage.stage-landscape #nextPhaseLabelWrapper {
-            margin-bottom: 0.75rem;
+            margin-bottom: 0;
         }
     </style>
 </head>
@@ -416,6 +421,7 @@
             isRotated: false,
             unrotateTimeout: null,
             stageObserver: null,
+            phaseDigits: 3, // widest countdown reading of the current phase
             
             // Flow Data Management 
             flows: [
@@ -451,6 +457,7 @@
                 nextLabel: document.getElementById('nextPhaseLabel'),
                 activeContainer: document.getElementById('activePhaseContainer'),
                 timerStage: document.getElementById('timerStage'),
+                bottomGroup: document.getElementById('timerBottomGroup'),
                 nextLabelWrapper: document.getElementById('nextPhaseLabelWrapper'),
                 settingsContainer: document.getElementById('settingsContainer'),
                 topNav: document.getElementById('topNav'),
@@ -806,6 +813,7 @@
                     const int1 = (parseFloat(document.getElementById('int1').value) || 4) * 1000;
                     this.nextPhaseTime = now + int1;
                     
+                    this.setPhaseDigits(int1 / 1000);
                     this.updatePhaseUI("Inhale", "action");
                     this.audio.play('inhale');
 
@@ -826,6 +834,7 @@
                     const firstStep = routine[this.activeRunIndex];
                     this.nextPhaseTime = now + (firstStep.dur * 1000);
                     
+                    this.setPhaseDigits(firstStep.dur);
                     this.updatePhaseUI(firstStep.name, firstStep.type, routine[this.activeRunIndex + 1]?.name);
                     this.highlightRoutineStep(this.activeRunIndex);
                     this.audio.play(firstStep.type === 'break' ? 'break_start' : 'action_start');
@@ -956,16 +965,30 @@
                 stage.style.width = Math.round(innerH) + 'px';
                 stage.style.height = Math.round(innerW) + 'px';
 
-                // Digit size is capped two ways:
-                //  - across the screen: phase label + next label + session pill eat ~160px
-                //  - down the screen: room for up to 4 monospace characters
-                const byThickness = (innerW - 160) / 1.25;
-                const byLength = innerH / 2.6;
-                const fontPx = Math.max(48, Math.min(200, Math.floor(Math.min(byThickness, byLength))));
+                // Give the digits every pixel the rotation freed up.
+                // Across the screen: whatever the phase label and the pill row don't use.
+                const labelH = this.ui.phaseLabel.offsetHeight || 24;
+                const groupH = this.ui.bottomGroup.offsetHeight || 56;
+                const byThickness = (innerW - labelH - groupH - 16) / 1.12;
+
+                // Down the screen: room for this phase's widest reading (mono ~0.62em per char)
+                const chars = Math.max(2, this.phaseDigits);
+                const byLength = (innerH - 24) / (chars * 0.62);
+
+                const fontPx = Math.max(48, Math.min(340, Math.floor(Math.min(byThickness, byLength))));
 
                 this.ui.intervalTime.style.fontSize = fontPx + 'px';
                 this.ui.intervalTime.style.lineHeight = '1';
-                this.ui.intervalTime.style.height = Math.round(fontPx * 1.25) + 'px';
+                this.ui.intervalTime.style.height = Math.round(fontPx * 1.12) + 'px';
+            },
+
+            // Font size is locked per phase (from the phase's longest reading) so the
+            // digits never resize mid-countdown, e.g. when 100 becomes 99.
+            setPhaseDigits(phaseSecs) {
+                const digits = String(Math.max(1, Math.ceil(phaseSecs))).length;
+                if (digits === this.phaseDigits) return;
+                this.phaseDigits = digits;
+                if (this.isRotated) this.fitStage();
             },
 
             clearStageSizing() {
@@ -1076,6 +1099,7 @@
                     const dur = parseFloat(document.getElementById(this.isFirstIntervalActive ? 'int1' : 'int2').value) || 4;
                     
                     this.nextPhaseTime += (dur * 1000);
+                    this.setPhaseDigits(dur);
                     this.updatePhaseUI(nextType === 'inhale' ? 'Inhale' : 'Exhale', 'action');
                     this.audio.play(nextType);
                     
@@ -1087,6 +1111,7 @@
                         const step = routine[this.activeRunIndex];
                         this.nextPhaseTime += (step.dur * 1000);
                         
+                        this.setPhaseDigits(step.dur);
                         this.updatePhaseUI(step.name, step.type, routine[this.activeRunIndex + 1]?.name);
                         this.highlightRoutineStep(this.activeRunIndex);
                         
