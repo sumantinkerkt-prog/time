@@ -479,7 +479,83 @@
                 btnResume: "flex-1 bg-amber-600 hover:bg-amber-500 text-white font-semibold py-4 px-6 rounded-2xl shadow-[0_8px_25px_rgba(245,158,11,0.3)] transform transition active:scale-95 text-[15px] tracking-[0.2em] uppercase flex items-center justify-center border border-amber-500/50"
             },
 
+            // --- Local Persistence (no server, browser localStorage only) ---
+            STORAGE_KEY: 'zenith_state_v1',
+
+            saveState() {
+                // Never persist mid-session timer state, only user-authored config
+                try {
+                    const val = (id) => {
+                        const el = document.getElementById(id);
+                        return el ? el.value : undefined;
+                    };
+                    const payload = {
+                        v: 1,
+                        mode: this.mode,
+                        currentFlowId: this.currentFlowId,
+                        flows: this.flows,
+                        breathing: {
+                            int1: val('int1'),
+                            int2: val('int2'),
+                            totalMin: val('totalMin'),
+                            totalSec: val('totalSec')
+                        }
+                    };
+                    localStorage.setItem(this.STORAGE_KEY, JSON.stringify(payload));
+                } catch (e) {
+                    // Storage full / disabled (private browsing) — app still works in-memory
+                }
+            },
+
+            loadState() {
+                let data;
+                try {
+                    const raw = localStorage.getItem(this.STORAGE_KEY);
+                    if (!raw) return;
+                    data = JSON.parse(raw);
+                } catch (e) {
+                    return;
+                }
+                if (!data || typeof data !== 'object') return;
+
+                // Flows: only accept well-formed entries, otherwise keep the built-in default
+                if (Array.isArray(data.flows)) {
+                    const clean = data.flows
+                        .filter(f => f && typeof f === 'object' && Array.isArray(f.routine))
+                        .map((f, i) => ({
+                            id: f.id || 'flow_' + Date.now() + '_' + i,
+                            name: typeof f.name === 'string' && f.name ? f.name : 'Unnamed Flow',
+                            routine: f.routine
+                                .filter(s => s && typeof s === 'object')
+                                .map((s, j) => ({
+                                    id: Number.isFinite(s.id) ? s.id : j + 1,
+                                    name: typeof s.name === 'string' && s.name ? s.name : 'Unnamed',
+                                    type: s.type === 'break' ? 'break' : 'action',
+                                    dur: Math.max(1, parseInt(s.dur, 10) || 60)
+                                }))
+                        }));
+                    if (clean.length) this.flows = clean;
+                }
+
+                if (data.mode === 'breathing' || data.mode === 'routine') this.mode = data.mode;
+
+                this.currentFlowId = this.flows.some(f => f.id === data.currentFlowId)
+                    ? data.currentFlowId
+                    : this.flows[0].id;
+
+                if (data.breathing && typeof data.breathing === 'object') {
+                    ['int1', 'int2', 'totalMin', 'totalSec'].forEach(id => {
+                        const stored = data.breathing[id];
+                        const el = document.getElementById(id);
+                        if (el && stored !== undefined && stored !== null && stored !== '') {
+                            el.value = stored;
+                        }
+                    });
+                }
+            },
+
             init() {
+                this.loadState();
                 this.bindEvents();
                 this.switchMode(this.mode, this.currentFlowId);
                 
@@ -502,6 +578,7 @@
                 ['totalMin', 'totalSec', 'int1', 'int2'].forEach(id => {
                     document.getElementById(id).addEventListener('input', () => {
                         if(this.state === 'idle') this.resetTimer();
+                        this.saveState();
                     });
                 });
 
@@ -610,6 +687,7 @@
                 
                 this.renderMenu();
                 this.resetTimer();
+                this.saveState();
             },
 
             addFlow() {
@@ -629,6 +707,7 @@
                     this.switchMode('routine', this.flows[0].id);
                 } else {
                     this.renderMenu();
+                    this.saveState();
                 }
             },
 
@@ -637,6 +716,7 @@
                 if (flow) {
                     flow.name = newName || 'Unnamed Flow';
                     this.renderMenu();
+                    this.saveState();
                 }
             },
 
@@ -691,6 +771,7 @@
                 const newId = routine.length > 0 ? Math.max(...routine.map(s => s.id)) + 1 : 1;
                 routine.push({ id: newId, name: "New Step", type: "action", dur: 60 });
                 this.renderRoutineList();
+                this.saveState();
                 this.openEditModal(newId);
             },
 
@@ -699,6 +780,7 @@
                 if (flow) {
                     flow.routine = flow.routine.filter(s => s.id !== id);
                     this.renderRoutineList();
+                    this.saveState();
                 }
             },
 
@@ -737,6 +819,7 @@
 
                 this.closeEditModal();
                 this.renderRoutineList();
+                this.saveState();
                 if(this.state === 'idle') this.resetTimer();
             },
 
