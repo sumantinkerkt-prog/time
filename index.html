@@ -138,6 +138,53 @@
         #timerStage.stage-landscape #nextPhaseLabelWrapper {
             margin-bottom: 0;
         }
+
+        /* ---- Hold & drag to reorder steps ---- */
+        .step-card {
+            /* Allow the list to scroll vertically, but let us hijack a long press */
+            touch-action: pan-y;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Finger is down, waiting out the hold delay */
+        .step-card.press-armed {
+            transform: scale(0.975);
+            transition: transform 0.18s ease;
+        }
+
+        /* Lifted card follows the pointer */
+        .step-card.dragging {
+            position: fixed;
+            z-index: 60;
+            margin: 0 !important;
+            pointer-events: none;
+            touch-action: none;
+            transition: none;
+            cursor: grabbing;
+            background-color: #1e293b;
+            border-color: rgba(16, 185, 129, 0.5);
+            box-shadow: 0 20px 45px -10px rgba(0, 0, 0, 0.75),
+                        0 0 0 1px rgba(16, 185, 129, 0.35),
+                        0 0 30px 0 rgba(16, 185, 129, 0.12);
+        }
+
+        /* The gap left behind, showing where the step will land */
+        .drop-placeholder {
+            border: 1px dashed rgba(16, 185, 129, 0.45);
+            background: rgba(16, 185, 129, 0.06);
+            border-radius: 1rem;
+            box-sizing: border-box;
+        }
+
+        .step-grip {
+            cursor: grab;
+            touch-action: none;
+        }
+        .step-grip:active { cursor: grabbing; }
+
+        /* Hide the reorder affordance while a session is running */
+        .session-active .step-grip { opacity: 0.15; pointer-events: none; }
     </style>
 </head>
 <body class="min-h-screen flex flex-col items-center justify-center p-0 sm:p-4 bg-slate-950">
@@ -242,9 +289,11 @@
                         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"></path></svg>
                         <span class="tracking-widest uppercase">Add Step</span>
                     </button>
+
+                    <p class="text-[10px] text-slate-600 tracking-wider uppercase text-center -mt-1">Hold a step to drag &amp; reorder</p>
                 </div>
                 
-                <div id="routineList" class="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                <div id="routineList" class="relative flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                     <!-- Populated dynamically -->
                 </div>
             </div>
@@ -574,6 +623,20 @@
             bindEvents() {
                 this.ui.mainBtn.addEventListener('click', () => this.handleMainAction());
                 this.ui.resetBtn.addEventListener('click', () => this.resetTimer());
+
+                // Stable references so the drag listeners can be removed again
+                this.boundDragMove = (e) => this.onDragMove(e);
+                this.boundDragEnd = (e) => this.onDragEnd(e);
+
+                // pointermove alone won't stop touch scrolling; this will.
+                window.addEventListener('touchmove', (e) => {
+                    if (this.drag.active) e.preventDefault();
+                }, { passive: false });
+
+                // Long-press on mobile pops the native context menu otherwise
+                document.getElementById('routineList').addEventListener('contextmenu', (e) => {
+                    if (e.target.closest('.step-card')) e.preventDefault();
+                });
                 
                 ['totalMin', 'totalSec', 'int1', 'int2'].forEach(id => {
                     document.getElementById(id).addEventListener('input', () => {
@@ -741,29 +804,276 @@
                     
                     const el = document.createElement('div');
                     // Improved card layout for steps
-                    el.className = `flex justify-between items-center py-2.5 px-4 rounded-2xl border transition-all duration-200 group ${isBreak ? 'bg-slate-900/40 border-slate-800/50' : 'bg-slate-800/40 border-slate-700/60'} hover:border-emerald-500/40`;
+                    el.className = `step-card flex justify-between items-center py-2.5 px-4 rounded-2xl border transition-all duration-200 group ${isBreak ? 'bg-slate-900/40 border-slate-800/50' : 'bg-slate-800/40 border-slate-700/60'} hover:border-emerald-500/40`;
                     el.id = `routine-step-${index}`;
+                    el.dataset.stepId = step.id;
                     
                     el.innerHTML = `
-                        <div class="flex items-center space-x-4">
-                            <button onclick="app.startTimer(${index})" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-full hover:bg-slate-800 transition transform active:scale-95" title="Play from here">
+                        <div class="flex items-center space-x-4 min-w-0">
+                            <button onclick="app.startTimer(${index})" class="text-slate-400 hover:text-emerald-400 p-1.5 rounded-full hover:bg-slate-800 transition transform active:scale-95 flex-shrink-0" title="Play from here">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                             </button>
-                            <span class="text-sm font-medium cursor-pointer ${isBreak ? 'text-amber-100/70' : 'text-slate-200'} group-hover:text-emerald-300 transition-colors" onclick="app.openEditModal(${step.id})" title="Edit Step">${step.name}</span>
+                            <span class="text-sm font-medium cursor-pointer truncate ${isBreak ? 'text-amber-100/70' : 'text-slate-200'} group-hover:text-emerald-300 transition-colors" onclick="app.onStepNameClick(${step.id})" title="Edit Step">${step.name}</span>
                         </div>
-                        <div class="flex items-center space-x-3">
+                        <div class="flex items-center space-x-2 flex-shrink-0">
                             <span class="text-xs font-mono ${isBreak ? 'text-amber-400/70' : 'text-emerald-400/70'}">${mins}:${secs}</span>
                             <button onclick="app.deleteRoutineStep(${step.id})" class="text-slate-600 hover:text-red-400 transition p-1.5 rounded-xl hover:bg-slate-800 opacity-0 group-hover:opacity-100">
                                 <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                             </button>
+                            <div class="step-grip text-slate-600 hover:text-emerald-400 transition-colors p-1.5 -mr-1" title="Drag to reorder">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>
+                            </div>
                         </div>
                     `;
+
+                    el.addEventListener('pointerdown', (e) => this.onStepPointerDown(e, el));
                     list.appendChild(el);
                 });
 
                 if (this.mode === 'routine' && this.state === 'idle') {
                     this.ui.totalTime.textContent = this.formatTime(totalSecs * 1000);
                 }
+            },
+
+            // --- Reorder: hold a step to lift it, drag to move it ---
+            HOLD_MS: 300,          // how long to press before the card lifts
+            MOVE_TOLERANCE: 8,     // px of movement that means "scrolling", not "holding"
+
+            drag: {
+                active: false,
+                el: null,
+                placeholder: null,
+                stepId: null,
+                pointerId: null,
+                pressTimer: null,
+                startX: 0,
+                startY: 0,
+                lastY: 0,
+                grabOffsetY: 0,
+                topAtLift: 0,
+                height: 0,
+                autoScrollRAF: null
+            },
+
+            onStepPointerDown(e, card) {
+                // Reordering is an editing action; ignore it mid-session
+                if (this.state !== 'idle') return;
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                // Let the play / delete buttons do their job
+                if (e.target.closest('button')) return;
+                if (this.drag.el) this.resetDrag();
+
+                const d = this.drag;
+                d.el = card;
+                d.stepId = parseInt(card.dataset.stepId, 10);
+                d.pointerId = e.pointerId;
+                d.startX = e.clientX;
+                d.startY = e.clientY;
+                d.lastY = e.clientY;
+
+                window.addEventListener('pointermove', this.boundDragMove, { passive: false });
+                window.addEventListener('pointerup', this.boundDragEnd);
+                window.addEventListener('pointercancel', this.boundDragEnd);
+
+                if (e.target.closest('.step-grip')) {
+                    // Explicit handle: lift immediately, no waiting
+                    e.preventDefault();
+                    this.liftCard(e.clientY);
+                } else {
+                    // Anywhere else on the card: hold to lift
+                    card.classList.add('press-armed');
+                    d.pressTimer = setTimeout(() => {
+                        d.pressTimer = null;
+                        this.liftCard(d.lastY);
+                    }, this.HOLD_MS);
+                }
+            },
+
+            liftCard(clientY) {
+                const d = this.drag;
+                const card = d.el;
+                if (!card || d.active) return;
+
+                d.active = true;
+                card.classList.remove('press-armed');
+
+                const rect = card.getBoundingClientRect();
+                d.grabOffsetY = clientY - rect.top;
+                d.topAtLift = rect.top;
+                d.height = rect.height;
+
+                // Hold the slot open so the list doesn't collapse under the finger
+                const ph = document.createElement('div');
+                ph.className = 'drop-placeholder';
+                ph.style.height = rect.height + 'px';
+                card.parentNode.insertBefore(ph, card);
+                d.placeholder = ph;
+
+                // Pin the card to the viewport so it can travel freely
+                card.style.left = rect.left + 'px';
+                card.style.top = rect.top + 'px';
+                card.style.width = rect.width + 'px';
+                card.style.height = rect.height + 'px';
+                card.classList.add('dragging');
+
+                if (navigator.vibrate) { try { navigator.vibrate(12); } catch (err) {} }
+
+                this.moveCard(clientY);
+                this.startAutoScroll();
+            },
+
+            moveCard(clientY) {
+                const d = this.drag;
+                if (!d.active) return;
+                const targetTop = clientY - d.grabOffsetY;
+                d.el.style.transform = `translateY(${targetTop - d.topAtLift}px) scale(1.02)`;
+                this.updatePlaceholder(targetTop + d.height / 2);
+            },
+
+            // Slide the placeholder to whichever slot the card's centre is over
+            updatePlaceholder(centreY) {
+                const list = document.getElementById('routineList');
+                const d = this.drag;
+                const others = Array.from(list.querySelectorAll('.step-card')).filter(c => c !== d.el);
+
+                // Decide the target slot in the list's own content coordinates using
+                // offsetTop/offsetHeight. Those are layout values, so they ignore the
+                // in-flight FLIP transforms — getBoundingClientRect() would report where
+                // a card is mid-animation, not where it actually sits, and that made the
+                // drop land a slot short during quick drags.
+                const contentY = centreY - list.getBoundingClientRect().top + list.scrollTop;
+
+                let before = null;
+                for (const c of others) {
+                    if (contentY < c.offsetTop + c.offsetHeight / 2) { before = c; break; }
+                }
+
+                // Already in the right slot? nothing to do
+                if (before ? d.placeholder.nextElementSibling === before
+                           : d.placeholder === list.lastElementChild) return;
+
+                // FLIP: measure, move, then animate the displaced cards from their old spots
+                const prevTops = new Map(others.map(el => [el, el.getBoundingClientRect().top]));
+
+                if (before) list.insertBefore(d.placeholder, before);
+                else list.appendChild(d.placeholder);
+
+                others.forEach(el => {
+                    const delta = prevTops.get(el) - el.getBoundingClientRect().top;
+                    if (!delta) return;
+                    el.style.transition = 'none';
+                    el.style.transform = `translateY(${delta}px)`;
+                    requestAnimationFrame(() => {
+                        el.style.transition = 'transform 0.2s cubic-bezier(0.2, 0, 0, 1)';
+                        el.style.transform = '';
+                    });
+                });
+            },
+
+            // Creep the list when the card is held near either edge
+            startAutoScroll() {
+                const list = document.getElementById('routineList');
+                const EDGE = 44, MAX_SPEED = 12;
+
+                const tick = () => {
+                    const d = this.drag;
+                    if (!d.active) { d.autoScrollRAF = null; return; }
+
+                    const r = list.getBoundingClientRect();
+                    let v = 0;
+                    if (d.lastY < r.top + EDGE) {
+                        v = -MAX_SPEED * Math.min(1, (r.top + EDGE - d.lastY) / EDGE);
+                    } else if (d.lastY > r.bottom - EDGE) {
+                        v = MAX_SPEED * Math.min(1, (d.lastY - (r.bottom - EDGE)) / EDGE);
+                    }
+
+                    if (v) {
+                        const before = list.scrollTop;
+                        list.scrollTop += v;
+                        if (list.scrollTop !== before) this.moveCard(d.lastY);
+                    }
+                    d.autoScrollRAF = requestAnimationFrame(tick);
+                };
+                this.drag.autoScrollRAF = requestAnimationFrame(tick);
+            },
+
+            onDragMove(e) {
+                const d = this.drag;
+                if (!d.el || (d.pointerId !== null && e.pointerId !== d.pointerId)) return;
+                d.lastY = e.clientY;
+
+                if (!d.active) {
+                    // Moved before the hold completed => the user meant to scroll
+                    if (Math.abs(e.clientY - d.startY) > this.MOVE_TOLERANCE ||
+                        Math.abs(e.clientX - d.startX) > this.MOVE_TOLERANCE) {
+                        this.resetDrag();
+                    }
+                    return;
+                }
+
+                e.preventDefault();
+                this.moveCard(e.clientY);
+            },
+
+            onDragEnd(e) {
+                const d = this.drag;
+                if (!d.el || (d.pointerId !== null && e.pointerId !== d.pointerId)) return;
+                if (d.active) this.commitDrop();
+                else this.resetDrag();
+            },
+
+            commitDrop() {
+                const d = this.drag;
+                const list = document.getElementById('routineList');
+                const flow = this.flows.find(f => f.id === this.currentFlowId);
+
+                // Where the placeholder sits among the *other* cards is exactly the
+                // insertion index once the dragged step is pulled out of the array.
+                const slots = Array.from(list.children).filter(el =>
+                    el === d.placeholder || (el.classList.contains('step-card') && el !== d.el));
+                const newIndex = slots.indexOf(d.placeholder);
+
+                if (flow && newIndex > -1) {
+                    const oldIndex = flow.routine.findIndex(s => s.id === d.stepId);
+                    if (oldIndex > -1 && oldIndex !== newIndex) {
+                        const [moved] = flow.routine.splice(oldIndex, 1);
+                        flow.routine.splice(newIndex, 0, moved);
+                        this.saveState();
+                    }
+                }
+
+                // A drag shouldn't also count as a tap on the step name
+                this.suppressClick = true;
+                setTimeout(() => { this.suppressClick = false; }, 350);
+
+                this.resetDrag();
+                this.renderRoutineList();
+            },
+
+            resetDrag() {
+                const d = this.drag;
+
+                if (d.pressTimer) { clearTimeout(d.pressTimer); d.pressTimer = null; }
+                if (d.autoScrollRAF) { cancelAnimationFrame(d.autoScrollRAF); d.autoScrollRAF = null; }
+
+                if (d.el) {
+                    d.el.classList.remove('press-armed', 'dragging');
+                    d.el.style.left = d.el.style.top = d.el.style.width = '';
+                    d.el.style.height = d.el.style.transform = '';
+                }
+                if (d.placeholder) d.placeholder.remove();
+
+                // Clear any leftover FLIP transforms
+                document.querySelectorAll('#routineList > .step-card').forEach(el => {
+                    el.style.transition = el.style.transform = '';
+                });
+
+                window.removeEventListener('pointermove', this.boundDragMove, { passive: false });
+                window.removeEventListener('pointerup', this.boundDragEnd);
+                window.removeEventListener('pointercancel', this.boundDragEnd);
+
+                d.active = false;
+                d.el = d.placeholder = d.stepId = d.pointerId = null;
             },
 
             addRoutineStep() {
@@ -782,6 +1092,14 @@
                     this.renderRoutineList();
                     this.saveState();
                 }
+            },
+
+            // Tapping a step name opens the editor — unless that "tap" was the
+            // tail end of a drag. Scoped here rather than inside openEditModal so
+            // that programmatic callers (e.g. addRoutineStep) are never blocked.
+            onStepNameClick(id) {
+                if (this.suppressClick) return;
+                this.openEditModal(id);
             },
 
             openEditModal(id) {
@@ -956,6 +1274,10 @@
             setRunningState() {
                 this.state = 'running';
                 worker.postMessage('start');
+
+                // Abandon any in-flight drag and dim the reorder handles
+                this.resetDrag();
+                document.body.classList.add('session-active');
                 
                 this.ui.mainBtn.textContent = 'PAUSE';
                 this.ui.mainBtn.className = this.classes.btnPause;
@@ -1090,6 +1412,7 @@
             resetTimer() {
                 this.state = 'idle';
                 worker.postMessage('stop');
+                document.body.classList.remove('session-active');
                 document.getElementById('silentAudio').pause();
                 
                 this.ui.mainBtn.textContent = 'START SESSION';
@@ -1233,7 +1556,7 @@
             highlightRoutineStep(idx) {
                 // Highlighting in the list is mostly invisible during run due to focus mode,
                 // but keeps state correct when paused/resumed
-                document.querySelectorAll('#routineList > div').forEach((el, i) => {
+                document.querySelectorAll('#routineList > .step-card').forEach((el, i) => {
                     if (i === idx) {
                         el.classList.replace('border-slate-700/60', 'border-emerald-500/80');
                         el.classList.replace('border-slate-800/50', 'border-amber-500/80');
